@@ -26,6 +26,19 @@ let messages = []; // Global chat messages (each with a room property)
 let rooms = {};    // Format: { roomName: { password: string, public: boolean, users: { socketId: username } } }
 let voiceRooms = {}; // Format: { roomName: { [socket.id]: username } }
 
+// Prepopulate public rooms if they don't exist
+const prepopulatedRooms = ["General", "Token Discussion", "Off-Topic", "Announcements"];
+prepopulatedRooms.forEach(roomName => {
+  if (!rooms[roomName]) {
+    rooms[roomName] = {
+      password: "",
+      public: true,
+      users: {}
+    };
+    console.log(`📂 Prepopulated public room: ${roomName}`);
+  }
+});
+
 // Endpoint to return public rooms
 app.get('/rooms', (req, res) => {
     let publicRooms = [];
@@ -158,8 +171,8 @@ io.on("connection", (socket) => {
                 const username = rooms[room].users[socket.id];
                 delete rooms[room].users[socket.id];
                 socket.to(room).emit("receiveMessage", { room, user: "Server", text: `${username} left the room.` });
-                // Optionally delete room if empty
-                if (Object.keys(rooms[room].users).length === 0) {
+                // Optionally delete room if empty and not prepopulated
+                if (Object.keys(rooms[room].users).length === 0 && !prepopulatedRooms.includes(room)) {
                     delete rooms[room];
                     console.log(`🗑️ Room deleted: ${room}`);
                 }
