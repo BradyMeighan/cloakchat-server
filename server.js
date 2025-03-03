@@ -6,7 +6,6 @@ const cors = require("cors");
 const PORT = process.env.PORT || 8080;
 const app = express();
 
-// Fix CORS issues
 app.use(cors({
     origin: "*",
     methods: ["GET", "POST"],
@@ -26,7 +25,6 @@ let messages = []; // Global chat messages (each with a room property)
 let rooms = {};    // Format: { roomName: { password: string, public: boolean, users: { socketId: username } } }
 let voiceRooms = {}; // Format: { roomName: { [socket.id]: username } }
 
-// Prepopulate public rooms if they don't exist
 const prepopulatedRooms = ["General", "Token Discussion", "Off-Topic", "Announcements"];
 prepopulatedRooms.forEach(roomName => {
   if (!rooms[roomName]) {
@@ -39,7 +37,6 @@ prepopulatedRooms.forEach(roomName => {
   }
 });
 
-// Endpoint to return public rooms
 app.get('/rooms', (req, res) => {
     let publicRooms = [];
     for (let room in rooms) {
@@ -56,9 +53,7 @@ app.get('/rooms', (req, res) => {
 io.on("connection", (socket) => {
     console.log(`🔗 New Connection: ${socket.id}`);
 
-    // Create a new room
     socket.on("createRoom", (data) => {
-        // Data: { room: string, password: string, username: string }
         const roomName = data.room;
         const password = data.password || "";
         const username = data.username;
@@ -68,7 +63,6 @@ io.on("connection", (socket) => {
             return;
         }
         
-        // Create room. If no password is provided, mark it as public.
         rooms[roomName] = { 
             password: password, 
             public: (password === ""), 
@@ -80,9 +74,7 @@ io.on("connection", (socket) => {
         console.log(`📂 Room created: ${roomName} by ${username}`);
     });
     
-    // Join an existing room
     socket.on("joinRoom", (data) => {
-        // Data: { room: string, password: string, username: string }
         const roomName = data.room;
         const password = data.password || "";
         const username = data.username;
@@ -92,7 +84,6 @@ io.on("connection", (socket) => {
             return;
         }
         
-        // Check password if required
         if (rooms[roomName].password && rooms[roomName].password !== password) {
             socket.emit("errorMessage", "Incorrect password.");
             return;
@@ -102,85 +93,75 @@ io.on("connection", (socket) => {
         rooms[roomName].users[socket.id] = username;
         socket.emit("roomJoined", { room: roomName, username });
         
-        // Send chat history for this room
         const roomMessages = messages.filter(m => m.room === roomName);
         socket.emit("chatHistory", roomMessages);
         
-        // Notify others in the room about the new user
         socket.to(roomName).emit("receiveMessage", { room: roomName, user: "Server", text: `${username} joined the room.` });
         console.log(`📥 ${username} joined room: ${roomName}`);
     });
     
-    // Handle sending messages
     socket.on("sendMessage", (data) => {
-        // Data: { room: string, user: string, text: string }
         messages.push(data);
         io.to(data.room).emit("receiveMessage", data);
         console.log(`💬 Message in ${data.room}: ${data.user}: ${data.text}`);
     });
     
-    // Voice Chat events using WebRTC signaling
+    // Voice Chat events using WebRTC signaling with added debug logs
+
     socket.on("joinVoice", (data) => {
-        // Data: { room: string, username: string }
         const roomName = data.room;
         const username = data.username;
         if (!voiceRooms[roomName]) {
             voiceRooms[roomName] = {};
         }
         voiceRooms[roomName][socket.id] = username;
-        // Use a separate room name for voice connections
         socket.join(roomName + "_voice");
         socket.emit("voiceConnected");
-        // Notify other voice peers of the new connection
         socket.to(roomName + "_voice").emit("voiceNewPeer", { peerId: socket.id, username });
-        console.log(`🎙️ ${username} joined voice room: ${roomName}`);
+        console.log(`🎙️ [joinVoice] ${username} (${socket.id}) joined voice room: ${roomName}`);
     });
     
     socket.on("voiceOffer", (data) => {
-        // Data: { offer, to, room: string, username: string }
+        console.log(`🎙️ [voiceOffer] From ${socket.id} to ${data.to} in room ${data.room}`, data);
         io.to(data.to).emit("voiceOffer", { from: socket.id, offer: data.offer, username: data.username, room: data.room });
     });
     
     socket.on("voiceAnswer", (data) => {
-        // Data: { answer, to, room: string }
+        console.log(`🎙️ [voiceAnswer] From ${socket.id} to ${data.to} in room ${data.room}`, data);
         io.to(data.to).emit("voiceAnswer", { from: socket.id, answer: data.answer, room: data.room });
     });
     
     socket.on("voiceCandidate", (data) => {
-        // Data: { candidate, to, room: string }
+        console.log(`🎙️ [voiceCandidate] From ${socket.id} to ${data.to} in room ${data.room}`, data);
         io.to(data.to).emit("voiceCandidate", { from: socket.id, candidate: data.candidate, room: data.room });
     });
     
     socket.on("leaveVoice", (data) => {
-        // Data: { room: string, username: string }
         const roomName = data.room;
         if (voiceRooms[roomName]) {
+            console.log(`🎙️ [leaveVoice] ${data.username} (${socket.id}) leaving voice room: ${roomName}`);
             delete voiceRooms[roomName][socket.id];
             socket.leave(roomName + "_voice");
             socket.to(roomName + "_voice").emit("receiveMessage", { room: roomName, user: "Server", text: `${data.username} left the voice chat.` });
-            console.log(`🎙️ ${data.username} left voice room: ${roomName}`);
         }
     });
     
-    // Clean up on disconnect
     socket.on("disconnect", () => {
         console.log(`❌ User Disconnected: ${socket.id}`);
-        // Remove user from text rooms
         for (let room in rooms) {
             if (rooms[room].users[socket.id]) {
                 const username = rooms[room].users[socket.id];
                 delete rooms[room].users[socket.id];
                 socket.to(room).emit("receiveMessage", { room, user: "Server", text: `${username} left the room.` });
-                // Optionally delete room if empty and not prepopulated
                 if (Object.keys(rooms[room].users).length === 0 && !prepopulatedRooms.includes(room)) {
                     delete rooms[room];
                     console.log(`🗑️ Room deleted: ${room}`);
                 }
             }
         }
-        // Remove user from voice rooms
         for (let room in voiceRooms) {
             if (voiceRooms[room][socket.id]) {
+                console.log(`❌ [disconnect] Removing ${socket.id} from voice room: ${room}`);
                 delete voiceRooms[room][socket.id];
                 socket.to(room + "_voice").emit("receiveMessage", { room, user: "Server", text: `A user left the voice chat.` });
                 if (Object.keys(voiceRooms[room]).length === 0) {
