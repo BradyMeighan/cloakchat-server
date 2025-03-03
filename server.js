@@ -51,10 +51,62 @@ app.get('/rooms', (req, res) => {
 });
 
 io.on("connection", (socket) => {
-    console.log(`🔗 New Connection: ${socket.id}`);
+    console.log(🔗 New Connection: ${socket.id});
 
-    // --- Text Chat Events (unchanged) ---
-    // ... your text chat events here ...
+    socket.on("createRoom", (data) => {
+        const roomName = data.room;
+        const password = data.password || "";
+        const username = data.username;
+        
+        if (rooms[roomName]) {
+            socket.emit("errorMessage", "Room already exists.");
+            return;
+        }
+        
+        rooms[roomName] = { 
+            password: password, 
+            public: (password === ""), 
+            users: {} 
+        };
+        socket.join(roomName);
+        rooms[roomName].users[socket.id] = username;
+        socket.emit("roomCreated", { room: roomName, username });
+        console.log(📂 Room created: ${roomName} by ${username});
+    });
+    
+    socket.on("joinRoom", (data) => {
+        const roomName = data.room;
+        const password = data.password || "";
+        const username = data.username;
+        
+        if (!rooms[roomName]) {
+            socket.emit("errorMessage", "Room does not exist.");
+            return;
+        }
+        
+        if (rooms[roomName].password && rooms[roomName].password !== password) {
+            socket.emit("errorMessage", "Incorrect password.");
+            return;
+        }
+        
+        socket.join(roomName);
+        rooms[roomName].users[socket.id] = username;
+        socket.emit("roomJoined", { room: roomName, username });
+        
+        const roomMessages = messages.filter(m => m.room === roomName);
+        socket.emit("chatHistory", roomMessages);
+        
+        socket.to(roomName).emit("receiveMessage", { room: roomName, user: "Server", text: ${username} joined the room. });
+        console.log(📥 ${username} joined room: ${roomName});
+    });
+    
+    socket.on("sendMessage", (data) => {
+        messages.push(data);
+        io.to(data.room).emit("receiveMessage", data);
+        console.log(💬 Message in ${data.room}: ${data.user}: ${data.text});
+    });
+    
+    // Voice Chat events using WebRTC signaling with added debug logs
 
     // --- Reworked Voice Chat Events ---
     socket.on("joinVoice", (data) => {
@@ -96,7 +148,7 @@ io.on("connection", (socket) => {
             socket.to(roomName + "_voice").emit("voicePeerDisconnected", { peerId: socket.id, username: data.username });
         }
     });
-
+    
     socket.on("disconnect", () => {
         console.log(`❌ User Disconnected: ${socket.id}`);
         // Handle text chat disconnection
