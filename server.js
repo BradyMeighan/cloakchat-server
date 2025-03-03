@@ -71,7 +71,7 @@ io.on("connection", (socket) => {
         socket.join(roomName);
         rooms[roomName].users[socket.id] = username;
         socket.emit("roomCreated", { room: roomName, username });
-        console.log(📂 Room created: ${roomName} by ${username});
+        console.log('📂 Room created: ${roomName} by ${username}');
     });
     
     socket.on("joinRoom", (data) => {
@@ -103,7 +103,7 @@ io.on("connection", (socket) => {
     socket.on("sendMessage", (data) => {
         messages.push(data);
         io.to(data.room).emit("receiveMessage", data);
-        console.log(💬 Message in ${data.room}: ${data.user}: ${data.text});
+        console.log('💬 Message in ${data.room}: ${data.user}: ${data.text}');
     });
     
     // Voice Chat events using WebRTC signaling with added debug logs
