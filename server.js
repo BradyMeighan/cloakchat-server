@@ -2,10 +2,11 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const PORT = process.env.PORT || 8080;
 
 const app = express();
 
-// Fix CORS issues by allowing all origins
+// Fix CORS issues
 app.use(cors({
     origin: "*",
     methods: ["GET", "POST"],
@@ -20,7 +21,7 @@ const io = new Server(server, {
     }
 });
 
-let messages = []; // Store chat history
+let messages = [];
 
 io.on("connection", (socket) => {
     console.log(`🔗 New Connection: ${socket.id}`);
@@ -28,11 +29,11 @@ io.on("connection", (socket) => {
     // Send chat history
     socket.emit("chatHistory", messages);
 
-    // Handle new messages
+    // Handle messages
     socket.on("sendMessage", (data) => {
         messages.push(data);
-        io.emit("receiveMessage", data); // Broadcast to all clients
-        console.log(`💬 New Message from ${data.user}: ${data.text}`);
+        io.emit("receiveMessage", data);
+        console.log(`💬 Message: ${data.user}: ${data.text}`);
     });
 
     socket.on("disconnect", () => {
@@ -41,7 +42,7 @@ io.on("connection", (socket) => {
 });
 
 // Use Railway's assigned PORT
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
 });
