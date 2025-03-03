@@ -51,7 +51,7 @@ app.get('/rooms', (req, res) => {
 });
 
 io.on("connection", (socket) => {
-    console.log(🔗 New Connection: ${socket.id});
+    console.log(`🔗 New Connection: ${socket.id}`);
 
     socket.on("createRoom", (data) => {
         const roomName = data.room;
