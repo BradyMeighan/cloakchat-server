@@ -448,6 +448,9 @@ io.on("connection", (socket) => {
         console.log(`📂 Room created: ${sanitizedRoomName} by ${sanitizedUsername}`);
     });
 
+    // Find this socket.on('joinRoom') event handler in paste.txt
+    // and modify the part that sends chat history
+    
     socket.on("joinRoom", async (data) => {
         // Apply rate limiting for room joining
         try {
@@ -467,24 +470,28 @@ io.on("connection", (socket) => {
             socket.emit("errorMessage", "Invalid room name or username");
             return;
         }
-
+    
         if (!rooms[sanitizedRoomName]) {
             socket.emit("errorMessage", "Room does not exist.");
             return;
         }
-
+    
         if (rooms[sanitizedRoomName].password && rooms[sanitizedRoomName].password !== password) {
             socket.emit("errorMessage", "Incorrect password.");
             return;
         }
-
+    
         socket.join(sanitizedRoomName);
         rooms[sanitizedRoomName].users[socket.id] = sanitizedUsername;
         socket.emit("roomJoined", { room: sanitizedRoomName, username: sanitizedUsername });
-
-        const roomMessages = messages.filter((m) => m.room === sanitizedRoomName);
-        socket.emit("chatHistory", roomMessages);
-
+    
+        // REMOVE or comment out the following lines that send chat history
+        // const roomMessages = messages.filter((m) => m.room === sanitizedRoomName);
+        // socket.emit("chatHistory", roomMessages);
+        
+        // Instead, send an empty history or a welcome message
+        socket.emit("chatHistory", []);
+    
         socket.to(sanitizedRoomName).emit("receiveMessage", { 
             room: sanitizedRoomName, 
             user: "Server", 
